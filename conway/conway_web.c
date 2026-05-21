@@ -33,17 +33,25 @@ uint8_t *buffer_grid = NULL; // will be used when we change states, so we do the
 
 // --- Part 1a & 1b starts here: -------------------
 //----------------------------------------------
-// EMSCRIPTEN_KEEPALIVE
-//?? get_width() goes here
+EMSCRIPTEN_KEEPALIVE
+int get_width() {
+    return WIDTH;
+}
 
-// EMSCRIPTEN_KEEPALIVE
-//?? set_width(??) { ???? }
+EMSCRIPTEN_KEEPALIVE
+void set_width(int new_width ) { 
+    WIDTH = new_width;
+ }
 
-// EMSCRIPTEN_KEEPALIVE
-//?? get_height() { ???? }
+EMSCRIPTEN_KEEPALIVE
+int get_height() { 
+    return HEIGHT;
+ }
 
-// EMSCRIPTEN_KEEPALIVE
-//?? set_height(??) { ???? }
+EMSCRIPTEN_KEEPALIVE
+void set_height(int new_height) { 
+    HEIGHT = new_height;
+ }
 
 //----------------------------------------------
 
@@ -72,21 +80,33 @@ int iterate();
  * Doesn't do error checking!!! This is dangerous (remember overflow errors?)
  */
 EMSCRIPTEN_KEEPALIVE
-?? set_cell(????) {
+int set_cell(int x, int y) {
     if (life_grid == NULL) return 1; // bail if no grid!
 
+    //checking if the values are within the grid
+    if (x < 0 || x >= WIDTH) return 1;
+    if (y < 0 || y >= HEIGHT) return 1;
     // set cell at the appropriate index in the life grid to alive
+   
     
+    int index = y * WIDTH + x;
+    life_grid[index] = 1;
     return 0; // end normally
 }
 
 EMSCRIPTEN_KEEPALIVE
-?? get_cell(????) {
+int get_cell(int x, int y) {
     if (life_grid == NULL) return 0; // if no grid what should we do? Return dead no matter what?
+    // same as above - checking x and y are in the grid 
+    if (x < 0 || x >= WIDTH) return 0;
+    if (y < 0 || y >= HEIGHT) return 0;
 
     // get cell value at the appropriate index in the life grid
     // return cell value to JavaScript 
-}
+
+    int index = y * WIDTH + x; 
+    return life_grid[index];
+}   
 //---------------------------------------------
 
 
