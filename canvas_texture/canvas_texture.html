@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script type="module">
+
+        import '/src/style.css';
+
+        import * as THREE from 'three';
+        import createWasmModule from "../conway/conway_web.js";
+        
+        function start(WasmModule) {
+            
+            if (!WasmModule) return;
+            
+            // in cells and pixels
+            const width = 256;
+            const height = 256;
+
+            // make it bigger!
+            WasmModule._set_width(width);
+            WasmModule._set_height(height);
+            
+            // 1. Initialize the C logic
+            WasmModule._setup_conway();
+            
+            // 2. Get data from C (should be 512 as above, this is redundant, just to show you how it works)
+            if( width !== WasmModule._get_width()) throw SyntaxError(`Width != width!`);
+            if( height !== WasmModule._get_height()) throw SyntaxError(`Height != height!`);
+            
+            // 3. Set up GoL canvas 
+            
+            const golCanvas = document.getElementById( 'gol-canvas' );
+            const ctxGoL = golCanvas.getContext( '2d' );
+            golCanvas.width = width;
+            golCanvas.height = height;
+            golCanvas.fillStyle = '#000';
+            // Make it bigger on screen using CSS
+            golCanvas.style.width = (width*2) + 'px';
+            golCanvas.style.height = (height*2) + 'px';
+            
+            // game of life texture
+            const GoLTexture = new THREE.CanvasTexture( ctxGoL.canvas );
+            
+            // Create an ImageData object for ultra-fast pixel manipulation
+            const imageData = ctxGoL.createImageData(width, height);
+            
+            let lastFrameTime = 0;
+            const targetFPS = 60; 
+            const frameInterval = 1000 / targetFPS;
+            
+            let mouseDown = false;
+            
+            golCanvas.addEventListener('mousedown', (e) => {
+                mouseDown = true;
+            });
+            
+            // capture everywhere
+            addEventListener('mouseup', (e) => {
+                mouseDown = false; 
+            });
+            golCanvas.addEventListener('mousemove', (e) => {
+                if (!mouseDown) return;
+                
+                const rect = golCanvas.getBoundingClientRect(); // get size of canvas element
+                const scaleX = width / rect.width; // get scale factors
+                const scaleY = height / rect.height;
+                // note: e.clientX is the coordinate relative to the canvas element (0-width of canvas)
+                const x = Math.floor((e.clientX - rect.left) * scaleX); // calculate grid position
+                const y = Math.floor((e.clientY - rect.top) * scaleY);
+                
+                if (x >= 0 && x < width && y >= 0 && y < height) {
+                    console.log(`setting cell ${x} ${y}`);
+                    WasmModule._set_cell(x, y);
+                    const pixelIndex = (y*width + x)*4; // account for scaling of 2x2
+                    imageData.data[pixelIndex] = 255;
+                    imageData.data[pixelIndex+1] = 255;
+                    imageData.data[pixelIndex+2] = 180;
+                    imageData.data[pixelIndex+3] = 255;
+                    ctxGoL.putImageData(imageData, 0, 0); // update in canvas
+                }
+            });
+            
+            //-----------------------------------------------------------------
+            // 4. Set up 3D Canvas
+            const canvas = document.getElementById('webgl-canvas');
+            canvas.style.width = (width*2) + 'px';
+            canvas.style.height = (height*2) + 'px';
+            
+            
+            const renderer = new THREE.WebGLRenderer( { antialias: true, canvas } );
+            
+            const fov = 50;
+            const aspect = 2; // the canvas default
+            const near = 0.1;
+            const far = 5;
+            const camera = new THREE.PerspectiveCamera( fov, aspect, near, far );
+            camera.position.z = 2;
+            
+            const scene = new THREE.Scene();
+            
+            const boxWidth = 1;
+            const boxHeight = 1;
+            const boxDepth = 1;
+            const geometry = new THREE.BoxGeometry( boxWidth, boxHeight, boxDepth );
+            
+            
+            const material = new THREE.MeshBasicMaterial( {
+                map: GoLTexture,
+            } );
+            const cube = new THREE.Mesh( geometry, material );
+            scene.add( cube );
+            
+            function resizeRendererToDisplaySize( renderer ) {
+                
+                const canvas = renderer.domElement;
+                const width = canvas.clientWidth;
+                const height = canvas.clientHeight;
+                const needResize = canvas.width !== width || canvas.height !== height;
+                if ( needResize ) {
+                    
+                    renderer.setSize( width, height, false );
+                    
+                }
+                
+                return needResize;
+                
+            }
+            
+            // 5. The Render Loop
+            function render(currentTime) {
+                
+                // Ask the browser to call render() again on the next frame
+                requestAnimationFrame(render);
+                
+                // ------------- ThreeJS: on resizing window ---------------------
+                if ( resizeRendererToDisplaySize( renderer ) ) {
+                    
+                    const canvas = renderer.domElement;
+                    camera.aspect = canvas.clientWidth / canvas.clientHeight;
+                    camera.updateProjectionMatrix();
+                    
+                }
+                // -------------------------------------------------
+                
+                
+                if (mouseDown) return; // don't do anything if drawing
+                
+                const deltaTime = currentTime - lastFrameTime;
+                
+                if (deltaTime >= frameInterval) {
+                    lastFrameTime = currentTime - (deltaTime % frameInterval);
+                    
+                    
+                    // Tell C to calculate the next frame
+                    WasmModule._iterate();
+                    
+                    const gridPointer = WasmModule._get_grid_ptr();
+                    
+                    
+                    // Use HEAPU8 for unsigned 8-bit integers
+                    const safeMemoryView = WasmModule.HEAPU8.subarray(gridPointer, gridPointer + (width * height));
+                    
+                    
+                    // Read the WASM memory and push it to the Canvas pixels
+                    for (let i = 0; i < width * height; i++) {
+                        const isAlive = safeMemoryView[i];
+                        
+                        // ImageData expects a 1D array of RGBA values (4 bytes per pixel)
+                        const pixelIndex = i * 4; 
+                        
+                        // If alive, make it green (0, 255, 0). If dead, make it black.
+                        imageData.data[pixelIndex] = 0;                 // R
+                        imageData.data[pixelIndex + 1] = isAlive ? 255 : 0; // G
+                        imageData.data[pixelIndex + 2] = 0;             // B
+                        imageData.data[pixelIndex + 3] = 255;           // A (fully opaque)
+                    }
+                    
+                    // Push the pixels to the GoL canvas
+                    ctxGoL.putImageData(imageData, 0, 0);
+                    
+                    
+                    // ------------- start ThreeJS stuff ---------------------
+                    
+                    GoLTexture.needsUpdate = true;
+                    
+                    // rotate cube    
+                    const speed = .0001;
+                    const rot = deltaTime * speed;
+                    cube.rotation.x += rot;
+                    cube.rotation.y += rot;
+
+                    // render and done!
+                    
+                    renderer.render( scene, camera );
+                    
+                }
+            }
+            
+            // Start the loop
+            render();
+        }
+        
+        createWasmModule().then(start);
+        
+    </script>
+    <style>
+        #webgl-canvas {
+            width:auto;
+        }
+        #gol-canvas {
+            width: auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <canvas id="webgl-canvas"></canvas>
+        <canvas id="gol-canvas"></canvas>
+        
+    </div>
+</body>
+</html>

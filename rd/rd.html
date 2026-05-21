@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reaction-Diffusion Patterns</title>
+    <style>
+        body { 
+            background-color: #1e1e1e; 
+            color: white; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            font-family: sans-serif;
+            padding: 20px;
+        }
+        canvas { 
+            background-color: black; 
+            margin-top: 20px; 
+            box-shadow: 0 0 10px rgba(255,255,255,0.2); 
+            image-rendering: pixelated; 
+        }
+        .controls {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #2e2e2e;
+            border-radius: 5px;
+            min-width: 300px;
+        }
+        .control-group {
+            margin: 10px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        label {
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+        input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+        }
+        .value-display {
+            font-size: 0.8em;
+            color: #aaa;
+        }
+    </style>
+</head>
+<body>
+    
+    <h1>Reaction-Diffusion Patterns (Gray-Scott Model)</h1>
+    <p style="color: #999; max-width: 600px;">
+        A reaction-diffusion system where two chemicals (A and B) react with each other 
+        and diffuse through space, creating emergent self-organizing patterns.
+    </p>
+    
+    <!-- Canvas for visualization -->
+    <canvas id="rdCanvas"></canvas>
+    
+    <!-- Interactive Controls -->
+    <div class="controls">
+        <div class="control-group">
+            <label for="feedRate">Feed Rate (f): <span class="value-display" id="feedDisplay">0.055</span></label>
+            <input type="range" id="feedRate" min="0" max="0.1" step="0.001" value="0.055">
+        </div>
+        
+        <div class="control-group">
+            <label for="killRate">Kill Rate (k): <span class="value-display" id="killDisplay">0.062</span></label>
+            <input type="range" id="killRate" min="0" max="0.1" step="0.001" value="0.062">
+        </div>
+        
+        <div class="control-group">
+            <label for="diffA">Diffusion A: <span class="value-display" id="diffADisplay">1.0</span></label>
+            <input type="range" id="diffA" min="0.1" max="2.0" step="0.1" value="1.0">
+        </div>
+        
+        <div class="control-group">
+            <label for="diffB">Diffusion B: <span class="value-display" id="diffBDisplay">0.5</span></label>
+            <input type="range" id="diffB" min="0.1" max="1.0" step="0.05" value="0.5">
+        </div>
+        
+        <div class="control-group">
+            <label for="timeStep">Time Step: <span class="value-display" id="timeStepDisplay">1.0</span></label>
+            <input type="range" id="timeStep" min="0.1" max="2.0" step="0.1" value="1.0">
+        </div>
+        
+        <button onclick="resetSimulation()" style="margin-top: 10px; padding: 8px 16px; cursor: pointer; background-color: #4a4a4a; color: white; border: none; border-radius: 3px;">Reset Pattern</button>
+    </div>
+    
+    <!-- Load the Emscripten generated JS file -->
+    <script type="module">
+        import createWasmModule from "./rd_web.js";
+        
+        let WasmModule = null;
+        
+        function start(module) {
+            WasmModule = module;
+            
+            if (!WasmModule) return;
+            
+            // Set up grid dimensions
+            WasmModule._set_width(512);
+            WasmModule._set_height(512);
+            
+            // Initialize the reaction-diffusion system
+            WasmModule._setup_reaction_diffusion();
+            
+            // Get dimensions
+            const width = WasmModule._get_width();
+            const height = WasmModule._get_height();
+            
+            // Setup Canvas
+            const canvas = document.getElementById('rdCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = width;
+            canvas.height = height;
+            
+            // Scale up on screen to see individual cells
+            canvas.style.width = (width * 2) + 'px';
+            canvas.style.height = (height * 2) + 'px';
+            
+            // Create ImageData for rendering
+            const imageData = ctx.createImageData(width, height);
+            
+            // Setup event listeners for controls
+            document.getElementById('feedRate').addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                WasmModule._set_feed_rate(value);
+                document.getElementById('feedDisplay').textContent = value.toFixed(3);
+            });
+            
+            document.getElementById('killRate').addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                WasmModule._set_kill_rate(value);
+                document.getElementById('killDisplay').textContent = value.toFixed(3);
+            });
+            
+            document.getElementById('diffA').addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                WasmModule._set_diffusion_A(value);
+                document.getElementById('diffADisplay').textContent = value.toFixed(1);
+            });
+            
+            document.getElementById('diffB').addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                WasmModule._set_diffusion_B(value);
+                document.getElementById('diffBDisplay').textContent = value.toFixed(2);
+            });
+            
+            document.getElementById('timeStep').addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                WasmModule._set_time_step(value);
+                document.getElementById('timeStepDisplay').textContent = value.toFixed(2);
+            });
+            
+            // Canvas click handler - set cell value at clicked position
+            // Calculates relative position - Uses getBoundingClientRect() to get the 
+            // canvas position on screen. 
+            // Converts to simulation coordinates - Calculates scale factors accounting 
+            // for the 2x display zoom and converts screen click coordinates to simulation 
+            // grid coordinates
+            // Calls _set_cell() - Invokes the WASM function with the adjusted x,y values 
+            // if they're within bounds
+            // 
+            // TL;DR: The handler converts from the scaled display coordinates (512x512) 
+            // back to the simulation grid coordinates (256x256) so the cell modification
+            // happens at the correct location in the simulation.
+
+            let mouseDown = false;
+
+            canvas.addEventListener('mousedown', (e) => {
+                mouseDown = true;
+            });
+
+            // capture everywhere
+            addEventListener('mouseup', (e) => {
+                mouseDown = false; 
+            });
+            canvas.addEventListener('mousemove', (e) => {
+                if (!mouseDown) return;
+
+                const rect = canvas.getBoundingClientRect(); // get size of canvas element
+                const scaleX = width / rect.width; // get scale factors
+                const scaleY = height / rect.height;
+                // note: e.clientX is the coordinate relative to the canvas element (0-width of canvas)
+                const x = Math.floor((e.clientX - rect.left) * scaleX); // calculate grid position
+                const y = Math.floor((e.clientY - rect.top) * scaleY);
+                
+                if (x >= 0 && x < width && y >= 0 && y < height) {
+                    console.log(`setting cell ${x} ${y}`);
+                    WasmModule._set_cell(x, y);
+                    const pixelIndex = 4*(y*width + x);
+                    imageData.data[pixelIndex] = 255;
+                    imageData.data[pixelIndex+1] = 255;
+                    imageData.data[pixelIndex+2] = 255;
+                    imageData.data[pixelIndex+3] = 255;
+                    ctx.putImageData(imageData, 0, 0);
+
+                }
+            });
+            
+            let frameCount = 0;
+            let lastFrameTime = 0;
+            const targetFPS = 30;
+            const frameInterval = 1000 / targetFPS;
+            
+            // Render loop
+            function render(currentTime) {
+                requestAnimationFrame(render);
+                if (mouseDown) return; // act like pause
+                
+                const deltaTime = currentTime - lastFrameTime;
+                
+                if (deltaTime >= frameInterval) {
+                    lastFrameTime = currentTime - (deltaTime % frameInterval);
+                    
+                    // Step the simulation
+                    WasmModule._iterate();
+                    
+                    // Get pointer to display grid
+                    const gridPointer = WasmModule._get_grid_ptr();
+                    
+                    // Create a safe view into WASM memory
+                    const safeMemoryView = WasmModule.HEAPU8.subarray(
+                    gridPointer, 
+                    gridPointer + (width * height)
+                    );
+                    
+                    // Map chemical concentration to colors
+                    for (let i = 0; i < width * height; i++) {
+                        const value = safeMemoryView[i];
+                        const pixelIndex = i * 4;
+                        
+                        // Create a gradient from black (0) through cyan/blue (B activity) to white
+                        imageData.data[pixelIndex] = Math.floor(value * 0.3);        // R (low)
+                        imageData.data[pixelIndex + 1] = value;                      // G (medium)
+                        imageData.data[pixelIndex + 2] = value;                      // B (medium)
+                        imageData.data[pixelIndex + 3] = 255;                        // A (opaque)
+                    }
+                    
+                    // Draw to canvas
+                    ctx.putImageData(imageData, 0, 0);
+                    frameCount++;
+                }
+            }
+            
+            // Start the animation
+            render(0);
+        }
+        
+        // Make reset function global
+        window.resetSimulation = function() {
+            if (WasmModule) {
+                WasmModule._cleanup();
+                console.log(`feed rate: ${WasmModule._get_feed_rate()}`);
+                WasmModule._setup_reaction_diffusion();
+            }
+        };
+        
+        // Load and start the WASM module
+        createWasmModule().then(start);
+        
+    </script>
+</body>
+</html>

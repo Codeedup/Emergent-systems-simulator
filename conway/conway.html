@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WASM Game of Life</title>
+    <style>
+        body { background-color: #1e1e1e; color: white; display: flex; flex-direction: column; align-items: center; font-family: sans-serif; }
+        canvas { background-color: black; margin-top: 20px; box-shadow: 0 0 10px rgba(255,255,255,0.2); image-rendering: pixelated; }
+    </style>
+</head>
+<body>
+    
+    <h1>Conway's Game of Life (C + WASM)</h1>
+    <!-- We will scale the canvas up using CSS so the pixels are visible -->
+    <canvas id="golCanvas"></canvas>
+    
+    <!-- Load the Emscripten generated JS file -->
+    <script type="module">
+        import createWasmModule from "./conway_web.js";
+        
+        function start(WasmModule) {
+            
+            if (!WasmModule) return;
+            
+            // make it bigger!
+            WasmModule._set_width(960);
+            WasmModule._set_height(720);
+
+            // 1. Initialize the C logic
+            WasmModule._setup_conway();
+            
+            // 2. Get data from C
+            const width = WasmModule._get_width();
+            const height = WasmModule._get_height();
+            
+            
+            // 4. Setup Canvas
+            const canvas = document.getElementById('golCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = width;
+            canvas.height = height;
+            
+            // Make it bigger on screen using CSS
+            canvas.style.width = (width*4) + 'px';
+            canvas.style.height = (height*4) + 'px';
+            
+            // Create an ImageData object for ultra-fast pixel manipulation
+            const imageData = ctx.createImageData(width, height);
+            
+            let lastFrameTime = 0;
+            const targetFPS = 60; 
+            const frameInterval = 1000 / targetFPS;
+            
+
+            //-------------------------------------------
+            //-- 2a starts here -------------------------
+            //-------------------------------------------
+
+            // As in the instruction, add a pause button to the HTML
+            // and a 'clicked' event handler to that element here
+            // so it toggles back and forth between paused  and running.
+            // Remember that you can change the button text in the event
+            // handler!
+
+
+            //-------------------------------------------
+
+            let mouseDown = false; // used to pause the simulation
+
+            canvas.addEventListener('mousedown', (e) => {
+                mouseDown = true;
+            });
+
+            // capture everywhere -- note that is is not called on an object
+            addEventListener('mouseup', (e) => {
+                mouseDown = false; 
+            });
+
+
+            canvas.addEventListener('mousemove', (e) => {
+                if (!mouseDown) return;
+
+                const rect = canvas.getBoundingClientRect(); // get size of canvas element
+                const scaleX = width / rect.width; // get scale factors
+                const scaleY = height / rect.height;
+                // note: e.clientX is the coordinate relative to the canvas element (0-width of canvas)
+                const x = Math.floor((e.clientX - rect.left) * scaleX); // calculate grid position
+                const y = Math.floor((e.clientY - rect.top) * scaleY);
+                
+                if (x >= 0 && x < width && y >= 0 && y < height) {
+                    console.log(`setting cell ${x} ${y}`);
+
+                    //-------------------------------------------
+                    //-- 2b starts here -------------------------
+                    //-------------------------------------------
+
+                    // if you are using bitwise operations, you don't simply
+                    // set the value of the cell to ALIVE. You need to think
+                    // about how you want to implement this -- in C, in the same
+                    // function with extra arguments? With different functions?
+                    // In JavaScript by getting the value first and then doing bitwise ops?
+                    // Up to you, as long as you make it work.
+
+                    WasmModule._set_cell(x, y);
+                    const pixelIndex = 4*(y*width + x);
+
+
+                    
+                    imageData.data[pixelIndex] = 255;
+                    imageData.data[pixelIndex+1] = 255;
+                    imageData.data[pixelIndex+2] = 180;
+                    imageData.data[pixelIndex+3] = 255;
+                    ctx.putImageData(imageData, 0, 0); // update the image in canvas so we can see it
+                }
+            });
+
+            // 5. The Render Loop
+            function render(currentTime) {
+                
+                // Ask the browser to call render() again on the next frame
+                requestAnimationFrame(render);
+                
+                if (mouseDown) return; // Check for PAUSED: don't do anything if drawing
+
+                const deltaTime = currentTime - lastFrameTime;
+                
+                if (deltaTime >= frameInterval) {
+                    lastFrameTime = currentTime - (deltaTime % frameInterval);
+                    
+                    // Tell C to calculate the next frame
+                    WasmModule._iterate();
+                    
+                    const gridPointer = WasmModule._get_grid_ptr();
+                    
+                    
+                    // Use HEAPU8 for unsigned 8-bit integers
+                    const safeMemoryView = WasmModule.HEAPU8.subarray(gridPointer, gridPointer + (width * height));
+                    
+                    
+                    // Read the WASM memory and push it to the Canvas pixels
+                    for (let i = 0; i < width * height; i++) {
+                        const isAlive = safeMemoryView[i];
+                        
+                        // ImageData expects a 1D array of RGBA values (4 bytes per pixel)
+                        const pixelIndex = i * 4; 
+                        
+                        // If alive, make it green (0, 255, 0). If dead, make it black.
+                        imageData.data[pixelIndex] = 0;                 // R
+                        imageData.data[pixelIndex + 1] = isAlive ? 255 : 0; // G
+                        imageData.data[pixelIndex + 2] = 0;             // B
+                        imageData.data[pixelIndex + 3] = 255;           // A (fully opaque)
+                    }
+                    
+                    // Push the pixels to the canvas
+                    ctx.putImageData(imageData, 0, 0);
+                    
+                    requestAnimationFrame(render);
+                }
+            }
+            
+            // Start the loop
+            render();
+        }
+        
+        createWasmModule().then(start);
+        
+    </script>
+</body>
+</html>
