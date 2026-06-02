@@ -19,7 +19,7 @@
 //these are in characters, not pixels
 int WIDTH = 48;
 int HEIGHT = 60;
-uint8_t life_chance = 25; // 25 percent chance of new life
+uint8_t life_chance = 2; // 25 percent chance of new life
 
 uint8_t *life_grid = NULL;   // current state of life
 uint8_t *buffer_grid = NULL; // will be used when we change states, so we do them all at once
@@ -107,6 +107,25 @@ int get_cell(int x, int y) {
     int index = y * WIDTH + x; 
     return life_grid[index];
 }   
+// new function that will store a value so that we can do bitwise functions
+EMSCRIPTEN_KEEPALIVE
+int set_cell_value(int x, int y, int value) {
+    if (life_grid == NULL) return 1;
+
+    if (x < 0 || x >= WIDTH) return 1;
+    if (y < 0 || y >= HEIGHT) return 1;
+
+    int index = y * WIDTH + x;
+    //check if value is binary
+    if (value != 0 && value != 1) {
+    value = 0;
+    }
+
+    life_grid[index] = value;
+    return 0;
+
+    
+}
 //---------------------------------------------
 
 
@@ -171,7 +190,7 @@ int iterate() {
 // Memory Cleanup: Call this from JS if you ever destroy the game
 EMSCRIPTEN_KEEPALIVE
 void cleanup() {
-    if (life_grid != NULL) {free(life_grid)
+    if (life_grid != NULL) {free(life_grid);
         life_grid = NULL;}
     if (buffer_grid != NULL) free(buffer_grid);
 }
