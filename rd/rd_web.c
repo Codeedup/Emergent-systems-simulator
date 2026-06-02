@@ -27,7 +27,7 @@ int HEIGHT = 128;
 
 double diffusion_A = 1.0f;      // Diffusion rate of chemical A
 double diffusion_B = 0.5f;      // Diffusion rate of chemical B
-double feed_rate = 0.055f;      // Feed rate (f)  (adding A)
+double feed_rate = 0.028f;      // Feed rate (f)  (adding A)
 double kill_rate = 0.062f;      // Kill rate (k) (removing B)
 double time_step = 1.0f;        // Time step for integration (with normalized kernel)
 
@@ -45,6 +45,7 @@ void update_reaction_diffusion();
 void update_display();
 int iterate();
 void set_cell(int x, int y); // set A/B concetration of cell at (x,y)
+int get_cell(int x, int y); //added a get_cell prototype because it was missing and appears below
 void cleanup();
 
 // ------------------------------
@@ -54,17 +55,26 @@ void cleanup();
 
 // --- Part 3a (like Conway 1a & 1b) starts here: -------------------
 //----------------------------------------------
-// EMSCRIPTEN_KEEPALIVE
-//?? get_width() goes here
+EMSCRIPTEN_KEEPALIVE
+int get_width() {
+    return WIDTH;
+}
 
-// EMSCRIPTEN_KEEPALIVE
-//?? set_width(??) { ???? }
+EMSCRIPTEN_KEEPALIVE
+void set_width(int new_width ) { 
+    WIDTH = new_width;
+ }
 
-// EMSCRIPTEN_KEEPALIVE
-//?? get_height() { ???? }
+EMSCRIPTEN_KEEPALIVE
+int get_height() { 
+    return HEIGHT;
+ }
 
-// EMSCRIPTEN_KEEPALIVE
-//?? set_height(??) { ???? }
+
+EMSCRIPTEN_KEEPALIVE
+void set_height(int new_height) { 
+    HEIGHT = new_height;
+ }
 
 //----------------------------------------------
 
@@ -87,7 +97,7 @@ EMSCRIPTEN_KEEPALIVE
 void set_diffusion_B(float d) { diffusion_B = d; }
 
 EMSCRIPTEN_KEEPALIVE
-void set_time_step(float time_step) { time_step = time_step; }
+void set_time_step(float t) { time_step= t; } //Bug fix ? 
 
 //------------------------------------------------
 
@@ -97,8 +107,7 @@ void set_time_step(float time_step) { time_step = time_step; }
 /**
  * Set cell value at index (used in JavaScript to 'paint' cells)
  */
-EMSCRIPTEN_KEEPALIVE
-?? set_cell(????) {
+
 
     // hint: this one is like the version in Game of Life,
     // but there are *two* arrays we need to set values for!
@@ -106,18 +115,50 @@ EMSCRIPTEN_KEEPALIVE
     // and for chemical_B use the diffusion value for B .
     // See the setup function below for an example of how this is done
 
+EMSCRIPTEN_KEEPALIVE
+void set_cell(int x, int y) { //changed to void to match prototype above
+    if (chemical_A == NULL || chemical_B == NULL) return ; 
+    
+    int radius = 5;
+
+    for (int dy = -radius; dy <= radius; dy++) {
+    for (int dx = -radius; dx <= radius; dx++) {
+        int px = x + dx;
+        int py = y + dy;
+    //checking if the values are within the grid
+    if (x < 0 || x >= WIDTH) return ;
+    if (y < 0 || y >= HEIGHT) return ;
+    // set cell at the appropriate index 
+
+    
+    
+    int index = y * WIDTH + x;
+    chemical_A[index] = 0.4;
+    chemical_B[index] = 1.5;
+    }
+}
 }
 
-EMSCRIPTEN_KEEPALIVE
-?? get_cell(????) {
 
     // hint: this one is like the version in Game of Life,
     // but there are *two* arrays so which do we use?
     // The answer is neither A nor B, instead use the display grid
     // because that is the calculated value of the system.
     // Again, see below to undertand how it is calculated
+EMSCRIPTEN_KEEPALIVE
+int get_cell(int x, int y) {
+    if (display_grid == NULL) return 0; 
+    // same as above - checking x and y are in the grid 
+    if (x < 0 || x >= WIDTH) return 0;
+    if (y < 0 || y >= HEIGHT) return 0;
 
-}
+    // get cell value at the appropriate index in the display gird
+    // return cell value to JavaScript 
+
+    int index = y * WIDTH + x; 
+    return display_grid[index];
+}   
+
 
 // Initialize the reaction-diffusion system
 EMSCRIPTEN_KEEPALIVE
