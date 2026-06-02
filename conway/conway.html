@@ -7,11 +7,29 @@
     <style>
         body { background-color: #1e1e1e; color: white; display: flex; flex-direction: column; align-items: center; font-family: sans-serif; }
         canvas { background-color: black; margin-top: 20px; box-shadow: 0 0 10px rgba(255,255,255,0.2); image-rendering: pixelated; }
+        button {
+            background-color: #4CAF50;color: white; padding: 15px 32px;text-align: center;text-decoration: none;
+                display: inline-block;
+                font-size: 16px;
+                border: none;
+                border-radius: 8px;
+                cursor: pointer;
+            }
+        .group{
+            display: flex;
+            gap: 15px;
+        }
     </style>
 </head>
 <body>
     
     <h1>Conway's Game of Life (C + WASM)</h1>
+    <div class="group">
+        <button id="pauseBtn">Pause</button>
+        <button id="resumeBtn">Resume</button>
+        <button id="restartBtn">Restart</button>
+    </div>
+
     <!-- We will scale the canvas up using CSS so the pixels are visible -->
     <canvas id="golCanvas"></canvas>
     
@@ -69,6 +87,29 @@
 
             let mouseDown = false; // used to pause the simulation
 
+            let paused = false;
+            
+            //grabs the buttons from the html
+            const pauseBtn = document.getElementById('pauseBtn');
+            const resumeBtn = document.getElementById('resumeBtn');
+            const restartBtn = document.getElementById('restartBtn')
+            
+            //when clicked pauses
+            pauseBtn.addEventListener('click', () => {
+                paused = true;
+            });
+            // when clicked sets the state back to false so render resumes
+            resumeBtn.addEventListener('click', () => {
+                paused = false;
+            });
+            //when clicked fully resets render
+            restartBtn.addEventListener('click', () =>{
+                WasmModule._cleanup();
+                WasmModule._setup_conway();
+                paused = false;
+            } )
+
+
             canvas.addEventListener('mousedown', (e) => {
                 mouseDown = true;
             });
@@ -122,7 +163,7 @@
                 // Ask the browser to call render() again on the next frame
                 requestAnimationFrame(render);
                 
-                if (mouseDown) return; // Check for PAUSED: don't do anything if drawing
+                if (paused || mouseDown) return; // Check for PAUSED: don't do anything if drawing
 
                 const deltaTime = currentTime - lastFrameTime;
                 

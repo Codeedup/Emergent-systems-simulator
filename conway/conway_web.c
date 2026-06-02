@@ -171,7 +171,8 @@ int iterate() {
 // Memory Cleanup: Call this from JS if you ever destroy the game
 EMSCRIPTEN_KEEPALIVE
 void cleanup() {
-    if (life_grid != NULL) free(life_grid);
+    if (life_grid != NULL) {free(life_grid)
+        life_grid = NULL;}
     if (buffer_grid != NULL) free(buffer_grid);
 }
 
