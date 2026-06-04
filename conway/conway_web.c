@@ -19,7 +19,7 @@
 //these are in characters, not pixels
 int WIDTH = 48;
 int HEIGHT = 60;
-uint8_t life_chance = 2; // 25 percent chance of new life
+uint8_t life_chance = 20; // 25 percent chance of new life
 
 uint8_t *life_grid = NULL;   // current state of life
 uint8_t *buffer_grid = NULL; // will be used when we change states, so we do them all at once

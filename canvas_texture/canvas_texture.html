@@ -10,6 +10,7 @@
 
         import * as THREE from 'three';
         import createWasmModule from "../conway/conway_web.js";
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js'; // import for camera movement
         
         function start(WasmModule) {
             
@@ -97,21 +98,94 @@
             const near = 0.1;
             const far = 5;
             const camera = new THREE.PerspectiveCamera( fov, aspect, near, far );
-            camera.position.z = 2;
+            camera.position.set(0, 0, 3.5); //camera further back because sphere is bigger than cube
             
+            // camera moving ability
+            const controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+
             const scene = new THREE.Scene();
+
+            //establish a new background for the scene:
+            scene.background = new THREE.Color(0x000000);
+
+            // geometry starts here for our objects:
             
-            const boxWidth = 1;
-            const boxHeight = 1;
-            const boxDepth = 1;
-            const geometry = new THREE.BoxGeometry( boxWidth, boxHeight, boxDepth );
+           const planetRadius = 0.5
+           const planetWidth = 16
+           const planetHeight = 16
+
+           const planetGeometry = new THREE.SphereGeometry(planetRadius, planetWidth, planetHeight)
+
+           const starGeometry = new THREE.SphereGeometry(0.010, 4, 4);
+
+           const deathStarGeo = new THREE.SphereGeometry(0.20, 24, 12);
+
+           const dishGeometry = new THREE.CircleGeometry(0.07, 32);
+
+           const seamGeometry = new THREE.TorusGeometry(0.205, 0.006, 8, 48);
+
             
-            
+            //materials (textures)
             const material = new THREE.MeshBasicMaterial( {
                 map: GoLTexture,
             } );
-            const cube = new THREE.Mesh( geometry, material );
-            scene.add( cube );
+
+            const whiteMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffffff
+            })
+
+            const deathStarMaterial = new THREE.MeshBasicMaterial({
+                color:0x808080
+            })
+
+            const dishMaterial = new THREE.MeshBasicMaterial({
+                color:0x222222
+            })
+
+            const seamMaterial = new THREE.MeshBasicMaterial({
+                color:0x111111
+            })
+
+            //meshes 
+
+
+            const planet = new THREE.Mesh( planetGeometry, material ); //main planet (Alderaan)
+            scene.add( planet );
+
+            
+
+            for (let i = 0; i < 200; i++ ) { //background stars
+                const star = new THREE.Mesh( starGeometry, whiteMaterial);
+                
+                //create random locations for that stars to spawn in:
+                const randomX = Math.random() * 16 - 8;
+                const randomY = (Math.random() - 0.5) * 10;
+                const randomZ = Math.random() * 5 -4;
+                star.position.set(randomX, randomY, randomZ);
+                scene.add(star)
+
+            }
+            const deathStar = new THREE.Mesh(deathStarGeo, deathStarMaterial);
+            deathStar.position.set(1.5, 0, 0);
+            scene.add(deathStar);
+
+            const dish = new THREE.Mesh(dishGeometry, dishMaterial);
+            dish.position.set(0 , 0.09, 0.2);
+            deathStar.add(dish);
+
+            const seam = new THREE.Mesh(seamGeometry, seamMaterial);
+            seam.rotation.x = Math.PI / 2;
+            deathStar.add(seam);
+
+            
+            //boids setup?
+
+            //
+            
+            //l systmes
+            
+            
             
             function resizeRendererToDisplaySize( renderer ) {
                 
@@ -144,7 +218,7 @@
                     
                 }
                 // -------------------------------------------------
-                
+                controls.update();
                 
                 if (mouseDown) return; // don't do anything if drawing
                 
@@ -189,8 +263,8 @@
                     // rotate cube    
                     const speed = .0001;
                     const rot = deltaTime * speed;
-                    cube.rotation.x += rot;
-                    cube.rotation.y += rot;
+                    planet.rotation.x += rot;
+                    planet.rotation.y += rot;
 
                     // render and done!
                     
