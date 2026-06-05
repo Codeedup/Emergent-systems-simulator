@@ -96,9 +96,9 @@
             const fov = 50;
             const aspect = 2; // the canvas default
             const near = 0.1;
-            const far = 25;
+            const far = 100;
             const camera = new THREE.PerspectiveCamera( fov, aspect, near, far );
-            camera.position.set(0, 0, 3.5); //camera further back because sphere is bigger than cube
+            camera.position.set(0, 0, 10); //camera further back because sphere is bigger than cube
             
             // camera moving ability
             const controls = new OrbitControls(camera, renderer.domElement);
@@ -111,23 +111,26 @@
 
             // geometry starts here for our objects:
             
-           const planetRadius = 1
+           const planetRadius = 3
            const planetWidth = 16
            const planetHeight = 16
 
            const planetGeometry = new THREE.SphereGeometry(planetRadius, planetWidth, planetHeight)
 
-           const starGeometry = new THREE.SphereGeometry(0.010, 4, 4);
+           const starGeometry = new THREE.SphereGeometry(0.035, 4, 4);
 
-           const deathStarGeo = new THREE.SphereGeometry(0.20, 24, 12);
+           const deathStarGeo = new THREE.SphereGeometry(0.6, 24, 12);
 
-           const dishGeometry = new THREE.CircleGeometry(0.07, 32);
+           const dishGeometry = new THREE.CircleGeometry(0.21, 32);
 
-           const seamGeometry = new THREE.TorusGeometry(0.205, 0.006, 8, 48);
+           const seamGeometry = new THREE.TorusGeometry(0.615, 0.018, 8, 48);
+
+           const shipGeometry = new THREE.ConeGeometry(0.035, 0.12, 8);
 
 
             
-            //materials (textures)
+
+            //materials (textures) -------
             const material = new THREE.MeshBasicMaterial( {
                 map: GoLTexture,
             } );
@@ -148,35 +151,36 @@
                 color:0x111111
             })
 
+            const shipMaterial = new THREE.MeshBasicMaterial({
+                color: 0xff4444
+            });
 
-            //meshes 
 
 
+           
+            
+            //meshes -------
             const planet = new THREE.Mesh( planetGeometry, material ); //main planet (Alderaan)
             scene.add( planet );
-
-            
 
             for (let i = 0; i < 100; i++ ) { //background stars
                 const star = new THREE.Mesh( starGeometry, whiteMaterial);
                 
                 //create random locations for that stars to spawn in:
-                const randomX = Math.random() * 16 - 8;
-                const randomY = (Math.random() - 0.5) * 10;
-                const randomZ = Math.random() * 5 -4;
+                const randomX = Math.random() * 40 - 20;
+                const randomY = Math.random() * 24 - 12;
+                const randomZ = Math.random() * 35 - 30;
                 star.position.set(randomX, randomY, randomZ);
                 scene.add(star)
 
             }
-
-            
 
             const deathStar = new THREE.Mesh(deathStarGeo, deathStarMaterial);
             // deathStar.position.set(1.5, 0, 0); 
             scene.add(deathStar);
 
             const dish = new THREE.Mesh(dishGeometry, dishMaterial);
-            dish.position.set(0 , 0.09, 0.18);
+            dish.position.set(0 , 0.27, 0.54);
             dish.rotation.x = -0.35;
             deathStar.add(dish);
 
@@ -184,18 +188,171 @@
             seam.rotation.x = Math.PI / 2;
             deathStar.add(seam);
 
-            
-
             let orbitAngle = 0;
-            const deathStarOrbitRadius = 1.5;
+            const deathStarOrbitRadius = 5;
 
-         
 
-            //boids setup?
+
+
+
+            //boids setup------ 
+            shipGeometry.rotateX(Math.PI /2);
+
+            //This is where we get the ships spawned in
+            const ships = [];
+            const shipCount = 5; 
+            const shipSpawnRadius = 8;
+            const squadronSpawnCenter = new THREE.Vector3(-8, 1.5, 2);
+            const squadronSpread = 0.4;
+
+
+            for (let i = 0; i < shipCount; i++) {
+                const ship = new THREE.Mesh(shipGeometry, shipMaterial);
+
+                const spawnAngle = Math.random() * Math.PI * 2;
+                const spawnHeight = randomOffset(2);
+
+                 ship.position.set(
+                squadronSpawnCenter.x + randomOffset(squadronSpread),
+                squadronSpawnCenter.y + randomOffset(squadronSpread * 0.4),
+                squadronSpawnCenter.z + randomOffset(squadronSpread)
+                );
+               
+                //random movement for now 
+                ship.userData.velocity = new THREE.Vector3(
+                    randomOffset(0.01),
+                    randomOffset(0.01),
+                    randomOffset(0.01)
+                );
+
+                scene.add(ship);
+                ships.push(ship);
+            }
+
+            // now to make them follow the Death Star
+            const seekForce = new THREE.Vector3();
+            const lookAtTarget = new THREE.Vector3();
+
+            const sepForce = new THREE.Vector3();
+            const aliForce = new THREE.Vector3();
+            const cohForce = new THREE.Vector3();
+            const diff = new THREE.Vector3();
+            const deathStarAvoidForce = new THREE.Vector3();
+
+            const shipVisualRange = 2;
+
+            function updateShips() {
+                for (let i = 0; i < ships.length; i++) {
+                    const ship = ships[i];
+                    const pos = ship.position;
+                    const vel = ship.userData.velocity;
+
+                    // Reset forces for this ship
+                    sepForce.set(0, 0, 0);
+                    aliForce.set(0, 0, 0);
+                    cohForce.set(0, 0, 0);
+
+                    let neighborsCount = 0;
+
+                    //  Seek the Death Star
+                    seekForce.copy(deathStar.position).sub(pos);
+                    seekForce.normalize().multiplyScalar(0.0002);
+                    vel.add(seekForce);
+
+                    const deathStarAvoidRadius = 0.9; // making sure the ships don't fly though the death star
+
+
+                    //  Boid neighbour rules adapted from boids/main.js from Week 7
+                    for (let j = 0; j < ships.length; j++) {
+                        if (i === j) continue;
+
+                        const otherShip = ships[j];
+                        const otherPos = otherShip.position;
+
+                        const distance = pos.distanceTo(otherPos);
+
+                        if (distance > 0 && distance < shipVisualRange) {
+                            // Separation: move away from nearby ships
+                            diff.copy(pos).sub(otherPos);
+                            diff.normalize().divideScalar(distance);
+                            sepForce.add(diff);
+
+                            // copy nearby ships' direction
+                            aliForce.add(otherShip.userData.velocity);
+
+                            //  move toward nearby ships' center
+                            cohForce.add(otherPos);
+
+                            neighborsCount++;
+                        }
+                    }
+
+                    // Apply boid forces if this ship has neighbours
+                    if (neighborsCount > 0) {
+                        aliForce.divideScalar(neighborsCount);
+
+                        cohForce.divideScalar(neighborsCount);
+                        cohForce.sub(pos);
+
+                        sepForce.multiplyScalar(0.003);
+                        aliForce.multiplyScalar(0.02);
+                        cohForce.multiplyScalar(0.01);
+
+                        vel.add(sepForce);
+                        vel.add(aliForce);
+                        vel.add(cohForce);
+                    }
+                    
+                    
+                    const distanceToDeathStar = pos.distanceTo(deathStar.position);
+
+                    //this part here stops ships from crashing into death star
+                    if (distanceToDeathStar < deathStarAvoidRadius) {
+                        deathStarAvoidForce.copy(pos).sub(deathStar.position);
+                        deathStarAvoidForce.normalize();
+
+                        const pushStrength = (deathStarAvoidRadius - distanceToDeathStar) * 0.05;
+
+                        deathStarAvoidForce.multiplyScalar(pushStrength);
+
+                        vel.add(deathStarAvoidForce);
+                    }
+                    // this one here stops them from crashing into planet (Alderaan)
+                    const planetAvoidRadius = 4.5;
+                    const planetAvoidForce = new THREE.Vector3();
+
+                    const distanceToPlanet = pos.distanceTo(planet.position);
+
+                    if (distanceToPlanet < planetAvoidRadius) {
+                        planetAvoidForce.copy(pos).sub(planet.position);
+                        planetAvoidForce.normalize();
+
+                        const pushStrength = (planetAvoidRadius - distanceToPlanet) * 0.05;
+
+                        planetAvoidForce.multiplyScalar(pushStrength);
+                        vel.add(planetAvoidForce);
+                        
+                    }
+            
+                    
+
+                    //  Speed limit
+                    if (vel.length() > 0.012) {
+                        vel.normalize().multiplyScalar(0.012);
+                    }
+
+                    // Move ship
+                    pos.add(vel);
+
+                    // Rotate ship to face movement direction
+                    lookAtTarget.copy(pos).add(vel);
+                    ship.lookAt(lookAtTarget);
+                }
+         }
 
             //Fractal 
 
-            //random function:
+            //randomize helper  function:
             function randomOffset(range) {
                 return (Math.random() - 0.5) * 2 * range;
             }
@@ -226,6 +383,7 @@
                     star.scale.set(starScale, starScale, starScale);
 
                     galaxyGroup.add(star);
+                    galaxyGroup.rotation.z += 0.0005;
                 }
 
                 //making smaller cluster around the original cluster
@@ -246,7 +404,7 @@
 
             const arms = 2;
             const pointsPerArm = 24;
-            const galaxyZ = -5;
+            const galaxyZ = -18;
 
             for (let arm = 0; arm < arms; arm++) {
 
@@ -256,7 +414,7 @@
 
                     const t = i / pointsPerArm;
 
-                    const radius = t * 2.0;
+                    const radius = t * 7.0;
                     const angle = t * Math.PI * 4 + armOffset;
 
                     const x = Math.cos(angle) * radius;
@@ -264,7 +422,7 @@
 
                     const position = new THREE.Vector3(x, y, galaxyZ);
 
-                    createCluster(position, 0.12, 2);
+                    createCluster(position, 0.4, 2);
                 }
             }
              
@@ -309,19 +467,19 @@
                 
                 const deltaTime = currentTime - lastFrameTime;
 
-
+                
                 //death star orbiting logic 
-                orbitAngle += 0.005
+                orbitAngle += 0.002
 
                 const deathStarOffset = new THREE.Vector3(deathStarOrbitRadius, 0, 0); //the deathstar starts with its local offset from the planet
                 const orbitMatrix = new THREE.Matrix4();
 
-                orbitMatrix.makeRotationY(orbitAngle); //rotation matrix turns the 
+                orbitMatrix.makeRotationY(orbitAngle); //rotation matrix turns 
 
-                deathStarOffset.applyMatrix4(orbitMatrix);
+                deathStarOffset.applyMatrix4(orbitMatrix); //Matrix is used to rotate around Y axis
 
                 deathStar.position.copy(deathStarOffset); // the rotated vector is now Death Star's world position
-
+                updateShips(); //updates where the ships and look based on the new Death Star's position
                 
                 if (deltaTime >= frameInterval) {
                     lastFrameTime = currentTime - (deltaTime % frameInterval);
