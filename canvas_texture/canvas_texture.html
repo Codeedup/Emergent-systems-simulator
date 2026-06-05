@@ -96,7 +96,7 @@
             const fov = 50;
             const aspect = 2; // the canvas default
             const near = 0.1;
-            const far = 5;
+            const far = 25;
             const camera = new THREE.PerspectiveCamera( fov, aspect, near, far );
             camera.position.set(0, 0, 3.5); //camera further back because sphere is bigger than cube
             
@@ -111,7 +111,7 @@
 
             // geometry starts here for our objects:
             
-           const planetRadius = 0.5
+           const planetRadius = 1
            const planetWidth = 16
            const planetHeight = 16
 
@@ -124,6 +124,7 @@
            const dishGeometry = new THREE.CircleGeometry(0.07, 32);
 
            const seamGeometry = new THREE.TorusGeometry(0.205, 0.006, 8, 48);
+
 
             
             //materials (textures)
@@ -147,6 +148,7 @@
                 color:0x111111
             })
 
+
             //meshes 
 
 
@@ -155,7 +157,7 @@
 
             
 
-            for (let i = 0; i < 200; i++ ) { //background stars
+            for (let i = 0; i < 100; i++ ) { //background stars
                 const star = new THREE.Mesh( starGeometry, whiteMaterial);
                 
                 //create random locations for that stars to spawn in:
@@ -166,12 +168,16 @@
                 scene.add(star)
 
             }
+
+            
+
             const deathStar = new THREE.Mesh(deathStarGeo, deathStarMaterial);
-            deathStar.position.set(1.5, 0, 0);
+            // deathStar.position.set(1.5, 0, 0); 
             scene.add(deathStar);
 
             const dish = new THREE.Mesh(dishGeometry, dishMaterial);
-            dish.position.set(0 , 0.09, 0.2);
+            dish.position.set(0 , 0.09, 0.18);
+            dish.rotation.x = -0.35;
             deathStar.add(dish);
 
             const seam = new THREE.Mesh(seamGeometry, seamMaterial);
@@ -179,10 +185,89 @@
             deathStar.add(seam);
 
             
+
+            let orbitAngle = 0;
+            const deathStarOrbitRadius = 1.5;
+
+         
+
             //boids setup?
 
-            //
+            //Fractal 
+
+            //random function:
+            function randomOffset(range) {
+                return (Math.random() - 0.5) * 2 * range;
+            }
+
+            const galaxyGroup = new THREE.Group();
+            scene.add(galaxyGroup);
+
+            //recursive function for galaxy creation
+            function createCluster (position, size, depth){
+                
+                if (depth <= 0){ //stops infinite recursion 
+                    return;
+                }
+                // creating normal stars around the cluster center 
+                const starsincluster = 8;
+
+                for (let i = 0; i < starsincluster; i++){
+                    const star = new THREE.Mesh(starGeometry, whiteMaterial);
+
+                    const x = position.x + randomOffset(size);
+                    const y = position.y + randomOffset(size);
+                    const z = position.z + randomOffset(size * 0.2);
+
+                    star.position.set(x, y, z);
+
+                    // adding smaller stars furher back
+                    const starScale = depth * 0.5;
+                    star.scale.set(starScale, starScale, starScale);
+
+                    galaxyGroup.add(star);
+                }
+
+                //making smaller cluster around the original cluster
+
+                const childClusters =2;
+
+                for (let i =0; i < childClusters; i++){
+                    const childPosition = new THREE.Vector3(
+                        position.x + randomOffset(size),
+                        position.y + randomOffset(size),
+                        position.z + randomOffset(size * 0.2)
+                    );
+                    createCluster(childPosition, size * 0.5, depth - 1);
+                }
+            }
             
+            // Galaxy Structure - with some conceptual help from ChatGPT 5.5
+
+            const arms = 2;
+            const pointsPerArm = 24;
+            const galaxyZ = -5;
+
+            for (let arm = 0; arm < arms; arm++) {
+
+                const armOffset = (arm / arms) * Math.PI * 2;
+
+                for (let i = 0; i < pointsPerArm; i++) {
+
+                    const t = i / pointsPerArm;
+
+                    const radius = t * 2.0;
+                    const angle = t * Math.PI * 4 + armOffset;
+
+                    const x = Math.cos(angle) * radius;
+                    const y = Math.sin(angle) * radius;
+
+                    const position = new THREE.Vector3(x, y, galaxyZ);
+
+                    createCluster(position, 0.12, 2);
+                }
+            }
+             
             //l systmes
             
             
@@ -223,6 +308,20 @@
                 if (mouseDown) return; // don't do anything if drawing
                 
                 const deltaTime = currentTime - lastFrameTime;
+
+
+                //death star orbiting logic 
+                orbitAngle += 0.005
+
+                const deathStarOffset = new THREE.Vector3(deathStarOrbitRadius, 0, 0); //the deathstar starts with its local offset from the planet
+                const orbitMatrix = new THREE.Matrix4();
+
+                orbitMatrix.makeRotationY(orbitAngle); //rotation matrix turns the 
+
+                deathStarOffset.applyMatrix4(orbitMatrix);
+
+                deathStar.position.copy(deathStarOffset); // the rotated vector is now Death Star's world position
+
                 
                 if (deltaTime >= frameInterval) {
                     lastFrameTime = currentTime - (deltaTime % frameInterval);
@@ -260,11 +359,11 @@
                     
                     GoLTexture.needsUpdate = true;
                     
-                    // rotate cube    
+                    // rotate planet     
                     const speed = .0001;
                     const rot = deltaTime * speed;
-                    planet.rotation.x += rot;
-                    planet.rotation.y += rot;
+                    
+                    planet.rotation.y += rot; // only making it turn on its axis 
 
                     // render and done!
                     
