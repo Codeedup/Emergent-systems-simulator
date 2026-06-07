@@ -13,7 +13,7 @@
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js'; // import for camera movement
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';// import to load in the xwing
         
-        function start(WasmModule) {
+        async function start(WasmModule) { // changed to async because we are using await for the xwing model
             
             if (!WasmModule) return;
             
@@ -171,6 +171,15 @@
 
             const scene = new THREE.Scene();
 
+
+            // added light because the xwing models need it 
+            const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
+            directionalLight.position.set(5, 5, 5);
+            scene.add(directionalLight);
+
             //establish a new background for the scene:
             scene.background = new THREE.Color(0x000000);
 
@@ -275,7 +284,7 @@
 
 
 
-            //---------- boids setup------ 
+            //---------- Everything boids related------ 
             
 
             //This is where we get the ships spawned in
@@ -285,9 +294,22 @@
             const squadronSpawnCenter = new THREE.Vector3(-8, 1.5, 2);
             const squadronSpread = 0.4;
 
+            let xwingModel = null;
+
+            // Test loading of xwing model, code is from Evan Raskob but changed to GLB because its smaller:
+            const loader = new GLTFLoader();
+            const obj = await loader.loadAsync('./xwing/x-wing.glb');
+
+            xwingModel = obj.scene;
+            xwingModel.scale.set(0.001, 0.001, 0.001);
+
+
 
             for (let i = 0; i < shipCount; i++) {
-                const ship = new THREE.Mesh(shipGeometry, shipMaterial);
+                // const ship = new THREE.Mesh(shipGeometry, shipMaterial);     OLD!! Ships before we loaded the model
+
+
+                const ship = xwingModel.clone(true);
 
                 const spawnAngle = Math.random() * Math.PI * 2;
                 const spawnHeight = randomOffset(2);
