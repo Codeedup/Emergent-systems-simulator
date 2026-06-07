@@ -321,7 +321,7 @@ int iterate()
     // If we only updated once per frame, the animation would take hours.
     // We run the math 15 times for every 1 time we draw to the screen.
 
-    for (int step = 0; step < 15; step++) {
+    for (int step = 0; step < 6; step++) { //turned this down so that it would run smoother for the three JS
         update_reaction_diffusion();
     }
     update_display();

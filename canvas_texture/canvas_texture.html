@@ -9,8 +9,9 @@
         import '/src/style.css';
 
         import * as THREE from 'three';
-        import createWasmModule from "../conway/conway_web.js";
+        import createWasmModule from "../rd/rd_web.js";
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js'; // import for camera movement
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';// import to load in the xwing
         
         function start(WasmModule) {
             
@@ -25,7 +26,7 @@
             WasmModule._set_height(height);
             
             // 1. Initialize the C logic
-            WasmModule._setup_conway();
+            WasmModule._setup_reaction_diffusion();
             
             // 2. Get data from C (should be 512 as above, this is redundant, just to show you how it works)
             if( width !== WasmModule._get_width()) throw SyntaxError(`Width != width!`);
@@ -42,7 +43,7 @@
             golCanvas.style.width = (width*2) + 'px';
             golCanvas.style.height = (height*2) + 'px';
             
-            // game of life texture
+            // new reaction diffusion texture
             const GoLTexture = new THREE.CanvasTexture( ctxGoL.canvas );
             
             // Create an ImageData object for ultra-fast pixel manipulation
@@ -76,9 +77,9 @@
                     console.log(`setting cell ${x} ${y}`);
                     WasmModule._set_cell(x, y);
                     const pixelIndex = (y*width + x)*4; // account for scaling of 2x2
-                    imageData.data[pixelIndex] = 255;
-                    imageData.data[pixelIndex+1] = 255;
-                    imageData.data[pixelIndex+2] = 180;
+                    imageData.data[pixelIndex] = 20;
+                    imageData.data[pixelIndex+1] = value;
+                    imageData.data[pixelIndex+2] = 80;
                     imageData.data[pixelIndex+3] = 255;
                     ctxGoL.putImageData(imageData, 0, 0); // update in canvas
                 }
@@ -98,11 +99,75 @@
             const near = 0.1;
             const far = 100;
             const camera = new THREE.PerspectiveCamera( fov, aspect, near, far );
-            camera.position.set(0, 0, 10); //camera further back because sphere is bigger than cube
+            camera.position.set(-7, 5, 15); //camera further back because sphere is bigger than cube
             
+            //making the reaction pause at some point because its causing too much lag
+            let reactionPaused = false
+            const reactionPausedAfter = 12000;
+
+
             // camera moving ability
             const controls = new OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
+
+            // keys for our camera movement 
+            const keys = {
+                w: false,
+                a: false,
+                s: false,
+                d: false
+            };
+
+            //checks when the keys have been pressed for camera movement
+            window.addEventListener('keydown', (e) => {
+                const key = e.key.toLowerCase();
+
+                if (key in keys) {
+                    keys[key] = true;
+                }
+            });
+
+            // stops the press when key is released again
+            window.addEventListener('keyup', (e) => {
+                const key = e.key.toLowerCase();
+
+                if (key in keys) {
+                    keys[key] = false;
+                }
+            });
+
+            //adding wasd camera movement to inspect the whole scene 
+            function updateCameraMovement() {
+                const moveSpeed = 0.06;
+
+                const forward = new THREE.Vector3();
+                camera.getWorldDirection(forward);
+                forward.y = 0;
+                forward.normalize();
+
+                const right = new THREE.Vector3();
+                right.crossVectors(forward, camera.up).normalize();
+
+                if (keys.w) {
+                    camera.position.addScaledVector(forward, moveSpeed);
+                    controls.target.addScaledVector(forward, moveSpeed);
+                }
+
+                if (keys.s) {
+                    camera.position.addScaledVector(forward, -moveSpeed);
+                    controls.target.addScaledVector(forward, -moveSpeed);
+                }
+
+                if (keys.a) {
+                    camera.position.addScaledVector(right, -moveSpeed);
+                    controls.target.addScaledVector(right, -moveSpeed);
+                }
+
+                if (keys.d) {
+                    camera.position.addScaledVector(right, moveSpeed);
+                    controls.target.addScaledVector(right, moveSpeed);
+                }
+            }
 
             const scene = new THREE.Scene();
 
@@ -119,6 +184,8 @@
 
            const starGeometry = new THREE.SphereGeometry(0.035, 4, 4);
 
+           const galaxyGeometry = new THREE.SphereGeometry(0.020, 4,4);
+
            const deathStarGeo = new THREE.SphereGeometry(0.6, 24, 12);
 
            const dishGeometry = new THREE.CircleGeometry(0.21, 32);
@@ -126,6 +193,7 @@
            const seamGeometry = new THREE.TorusGeometry(0.615, 0.018, 8, 48);
 
            const shipGeometry = new THREE.ConeGeometry(0.035, 0.12, 8);
+           shipGeometry.rotateX(Math.PI /2);// makes sure the ships are angled correctly
 
 
             
@@ -155,6 +223,15 @@
                 color: 0xff4444
             });
 
+            const laserMaterial = new THREE.LineBasicMaterial({
+                color: 0xff0000
+            });
+
+
+            const explosionMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffaa00
+            })
+
 
 
            
@@ -162,6 +239,9 @@
             //meshes -------
             const planet = new THREE.Mesh( planetGeometry, material ); //main planet (Alderaan)
             scene.add( planet );
+            planet.rotation.y = Math.PI; // flips the planet so you see the reaction straight away 
+
+
 
             for (let i = 0; i < 100; i++ ) { //background stars
                 const star = new THREE.Mesh( starGeometry, whiteMaterial);
@@ -188,15 +268,15 @@
             seam.rotation.x = Math.PI / 2;
             deathStar.add(seam);
 
-            let orbitAngle = 0;
+            let orbitAngle = Math.PI; // variable that will update the death star position eventually
             const deathStarOrbitRadius = 5;
 
 
 
 
 
-            //boids setup------ 
-            shipGeometry.rotateX(Math.PI /2);
+            //---------- boids setup------ 
+            
 
             //This is where we get the ships spawned in
             const ships = [];
@@ -241,6 +321,34 @@
 
             const shipVisualRange = 2;
 
+            const lasers = []; // initial lazer count 
+            const explosionParticles = [];
+            let deathStarExploded = false;
+
+
+            // function that takes ship position and direction and then adds a line or laser
+            function fireLaser(ship) {
+                const direction = new THREE.Vector3();
+                ship.getWorldDirection(direction); // get ships direction so that we can orient the laser 
+                direction.normalize();
+
+                const start = ship.position.clone();
+                const end = ship.position.clone().addScaledVector(direction, 0.18);
+
+                const laserGeometry = new THREE.BufferGeometry().setFromPoints([
+                    start,
+                    end
+                ]);
+
+                const laser = new THREE.Line(laserGeometry, laserMaterial);
+
+                laser.userData.velocity = direction.multiplyScalar(0.1);
+                laser.userData.life = 20;
+
+                scene.add(laser);
+                lasers.push(laser);
+            }
+
             function updateShips() {
                 for (let i = 0; i < ships.length; i++) {
                     const ship = ships[i];
@@ -254,11 +362,17 @@
 
                     let neighborsCount = 0;
 
-                    //  Seek the Death Star
+
+                // seek the death star if it exists otherwise run away. 
+                if (!deathStarExploded) {
                     seekForce.copy(deathStar.position).sub(pos);
                     seekForce.normalize().multiplyScalar(0.0002);
                     vel.add(seekForce);
-
+                } else {
+                    seekForce.copy(pos).sub(explosionCenter);
+                    seekForce.normalize().multiplyScalar(0.0004);
+                    vel.add(seekForce);
+}
                     const deathStarAvoidRadius = 0.9; // making sure the ships don't fly though the death star
 
 
@@ -347,6 +461,10 @@
                     // Rotate ship to face movement direction
                     lookAtTarget.copy(pos).add(vel);
                     ship.lookAt(lookAtTarget);
+
+                    if (Math.random() < 0.01) { // randomly fires the lazer particle from the ships 
+                        fireLaser(ship);
+                    }
                 }
          }
 
@@ -370,7 +488,7 @@
                 const starsincluster = 8;
 
                 for (let i = 0; i < starsincluster; i++){
-                    const star = new THREE.Mesh(starGeometry, whiteMaterial);
+                    const star = new THREE.Mesh(galaxyGeometry, whiteMaterial);
 
                     const x = position.x + randomOffset(size);
                     const y = position.y + randomOffset(size);
@@ -425,8 +543,6 @@
                     createCluster(position, 0.4, 2);
                 }
             }
-             
-            //l systmes
             
             
             
@@ -445,6 +561,70 @@
                 return needResize;
                 
             }
+
+            function updateLasers() {
+                for (let i = lasers.length - 1; i >= 0; i--) {
+                    const laser = lasers[i];
+
+                    laser.position.add(laser.userData.velocity);
+                    laser.userData.life--;
+
+                    if (laser.userData.life <= 0) {
+                        scene.remove(laser);
+                        laser.geometry.dispose();
+                        lasers.splice(i, 1);
+                    }
+                }
+            }
+
+
+            let explosionCenter = new THREE.Vector3();
+            // adding particle "explosion" for death star 
+            function explodeDeathStar() {
+                if (deathStarExploded) return;
+
+                deathStarExploded = true;
+
+                explosionCenter.copy(deathStar.position);
+
+                deathStar.visible = false; // makes the death star invisibile so it looks like it exploded
+
+                for (let i = 0; i < 60; i++) {
+                    // creates random explosion particles 
+                    const particleGeometry = new THREE.SphereGeometry(0.04, 6, 6);
+                    const particle = new THREE.Mesh(particleGeometry, explosionMaterial);
+
+                    particle.position.copy(explosionCenter);
+
+                    const velocity = new THREE.Vector3(
+                        randomOffset(0.08),
+                        randomOffset(0.08),
+                        randomOffset(0.08)
+                    );
+
+                    particle.userData.velocity = velocity;
+                    particle.userData.life = 80;
+
+                    scene.add(particle);
+                    explosionParticles.push(particle);
+                }
+            }
+
+            function updateExplosionParticles() {
+                for (let i = explosionParticles.length - 1; i >= 0; i--) {
+                    const particle = explosionParticles[i];
+
+                    particle.position.add(particle.userData.velocity); // makes the particles fly outward like an explosion
+                    particle.userData.velocity.multiplyScalar(0.98);
+                    particle.userData.life--;
+
+                    if (particle.userData.life <= 0) { // remove the particles after particle.userData.life hits zero
+                        scene.remove(particle);
+                        particle.geometry.dispose(); // added so that memory doesn't build up
+                        explosionParticles.splice(i, 1); // removes it from the array 
+                    }
+                }
+            }
             
             // 5. The Render Loop
             function render(currentTime) {
@@ -460,7 +640,9 @@
                     camera.updateProjectionMatrix();
                     
                 }
-                // -------------------------------------------------
+                // -
+                updateCameraMovement();// inputs our camera movement
+
                 controls.update();
                 
                 if (mouseDown) return; // don't do anything if drawing
@@ -480,13 +662,28 @@
 
                 deathStar.position.copy(deathStarOffset); // the rotated vector is now Death Star's world position
                 updateShips(); //updates where the ships and look based on the new Death Star's position
+                updateLasers(); // call our laser function after ships so we get the correct position and direction
+                updateExplosionParticles(); // get the explosionswas
                 
+
+                // gets the death star position and starts timer before explosion. 
+                deathStar.position.copy(deathStarOffset);
+                if (currentTime > 15000) {
+                    explodeDeathStar();
+                }
+
+
                 if (deltaTime >= frameInterval) {
                     lastFrameTime = currentTime - (deltaTime % frameInterval);
                     
-                    
-                    // Tell C to calculate the next frame
-                    WasmModule._iterate();
+                    if (currentTime > reactionPausedAfter) {
+                        reactionPaused = true;
+                    }
+                                        
+                    // Pause the reaction after 10 seconds to reduce lag
+                    if (!reactionPaused) {
+                        WasmModule._iterate();
+                    }
                     
                     const gridPointer = WasmModule._get_grid_ptr();
                     
@@ -495,17 +692,17 @@
                     const safeMemoryView = WasmModule.HEAPU8.subarray(gridPointer, gridPointer + (width * height));
                     
                     
-                    // Read the WASM memory and push it to the Canvas pixels
+                    // Read the WASM memory and push it to the Canvas pixels. Changed the intial function to be reaction diffusion instead of conway
                     for (let i = 0; i < width * height; i++) {
-                        const isAlive = safeMemoryView[i];
+                        const value = safeMemoryView[i];
                         
                         // ImageData expects a 1D array of RGBA values (4 bytes per pixel)
                         const pixelIndex = i * 4; 
                         
                         // If alive, make it green (0, 255, 0). If dead, make it black.
                         imageData.data[pixelIndex] = 0;                 // R
-                        imageData.data[pixelIndex + 1] = isAlive ? 255 : 0; // G
-                        imageData.data[pixelIndex + 2] = 0;             // B
+                        imageData.data[pixelIndex + 1] = value ? 255 : 0; // G
+                        imageData.data[pixelIndex + 2] = 255 - value;             // B
                         imageData.data[pixelIndex + 3] = 255;           // A (fully opaque)
                     }
                     
@@ -513,7 +710,6 @@
                     ctxGoL.putImageData(imageData, 0, 0);
                     
                     
-                    // ------------- start ThreeJS stuff ---------------------
                     
                     GoLTexture.needsUpdate = true;
                     
@@ -538,19 +734,74 @@
         
     </script>
     <style>
-        #webgl-canvas {
-            width:auto;
-        }
+        /* Canvas sizing: allow canvases to shrink so the info menu sits to the right */
+        #webgl-canvas,
         #gol-canvas {
-            width: auto;
+            display: block;
+            max-width: 100%;
+            height: auto;
+        }
+
+        #app {
+            display: flex;
+            /* fallback: stack menu on top when dev server inspection isn't available */
+            flex-direction: column;
+            align-items: stretch;
+            gap: 20px;
+            flex-wrap: nowrap;
+        }
+
+        /* Make canvas-area flexible so it can shrink for the fixed-width info menu */
+        #canvas-area {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            flex: 1 1 auto;
+            min-width: 0; /* allow shrinking inside flex container */
+        }
+
+        /* Keep info menu a compact box; add top gap for visual breathing room */
+        #info-menu {
+            width: 220px;
+            flex: 0 0 220px;
+            padding: 12px;
+            margin-top: 12px;
+            background: rgba(0, 0, 0, 0.75);
+            color: white;
+            font-family: Arial, sans-serif;
+            border: 1px solid rgba(255,255,255,0.9);
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+        }
+
+        #info-menu h2 {
+            margin-top: 0;
+            font-size: 18px;
+            margin-bottom: 6px;
+        }
+
+        #info-menu p {
+            font-size: 13px;
+            line-height: 1.4;
+            margin: 0;
         }
     </style>
 </head>
 <body>
     <div id="app">
-        <canvas id="webgl-canvas"></canvas>
-        <canvas id="gol-canvas"></canvas>
-        
+        <div id="info-menu">
+            <h2>Battle of Yavin</h2>
+            <p>
+                This is a Star Wars simulation of the Battle of Yavin.
+                You can move around using WASD and look around with the mouse.
+                After 15 seconds the rebels will win and the Death Star will explode.
+            </p>
+        </div>
+
+        <div id="canvas-area">
+            <canvas id="webgl-canvas"></canvas>
+            <canvas id="gol-canvas"></canvas>
+        </div>
     </div>
 </body>
 </html>
