@@ -122,17 +122,17 @@ void set_cell(int x, int y) { //changed to void to match prototype above
     int radius = 5;
 
     for (int dy = -radius; dy <= radius; dy++) {
-    for (int dx = -radius; dx <= radius; dx++) {
-        int px = x + dx;
-        int py = y + dy;
+        for (int dx = -radius; dx <= radius; dx++) {
+            int px = x + dx;
+            int py = y + dy;
     //checking if the values are within the grid
-    if (x < 0 || x >= WIDTH) return ;
-    if (y < 0 || y >= HEIGHT) return ;
+    if (px < 0 || px >= WIDTH) return ;
+    if (py < 0 || py >= HEIGHT) return ;
     // set cell at the appropriate index 
 
     
     
-    int index = y * WIDTH + x;
+    int index = py * WIDTH + px;
     chemical_A[index] = 0.4;
     chemical_B[index] = 1.5;
     }

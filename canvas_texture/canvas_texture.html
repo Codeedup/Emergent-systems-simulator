@@ -78,7 +78,7 @@
                     WasmModule._set_cell(x, y);
                     const pixelIndex = (y*width + x)*4; // account for scaling of 2x2
                     imageData.data[pixelIndex] = 20;
-                    imageData.data[pixelIndex+1] = value;
+                    imageData.data[pixelIndex+1] = 255;
                     imageData.data[pixelIndex+2] = 80;
                     imageData.data[pixelIndex+3] = 255;
                     ctxGoL.putImageData(imageData, 0, 0); // update in canvas
@@ -387,7 +387,7 @@
 
                 // seek the death star if it exists otherwise run away. 
                 if (!deathStarExploded) {
-                    seekForce.copy(deathStar.position).sub(pos);
+                    seekForce.copy(deathStar.position).sub(pos); // steer ship toward the Death Star by subtracting ship from target
                     seekForce.normalize().multiplyScalar(0.0002);
                     vel.add(seekForce);
                 } else {
@@ -410,13 +410,13 @@
                         if (distance > 0 && distance < shipVisualRange) {
                             // Separation: move away from nearby ships
                             diff.copy(pos).sub(otherPos);
-                            diff.normalize().divideScalar(distance);
+                            diff.normalize().divideScalar(distance); // closer ships push harder to get away 
                             sepForce.add(diff);
 
-                            // copy nearby ships' direction
+                            // copy nearby ships' velocity 
                             aliForce.add(otherShip.userData.velocity);
 
-                            //  move toward nearby ships' center
+                            //  move toward average position of nearby ships 
                             cohForce.add(otherPos);
 
                             neighborsCount++;
@@ -442,7 +442,7 @@
                     
                     const distanceToDeathStar = pos.distanceTo(deathStar.position);
 
-                    //this part here stops ships from crashing into death star
+                    //this part here stops ships from crashing into death star using a vector pointing away from it 
                     if (distanceToDeathStar < deathStarAvoidRadius) {
                         deathStarAvoidForce.copy(pos).sub(deathStar.position);
                         deathStarAvoidForce.normalize();
@@ -676,13 +676,16 @@
                 orbitAngle += 0.002
 
                 const deathStarOffset = new THREE.Vector3(deathStarOrbitRadius, 0, 0); //the deathstar starts with its local offset from the planet
+                
+                // buildling rotation matrix that uses the Offset vector 
                 const orbitMatrix = new THREE.Matrix4();
 
                 orbitMatrix.makeRotationY(orbitAngle); //rotation matrix turns 
 
                 deathStarOffset.applyMatrix4(orbitMatrix); //Matrix is used to rotate around Y axis
 
-                deathStar.position.copy(deathStarOffset); // the rotated vector is now Death Star's world position
+                deathStar.position.copy(deathStarOffset); // the rotated vector is now Death Star's world position instead of old local
+
                 updateShips(); //updates where the ships and look based on the new Death Star's position
                 updateLasers(); // call our laser function after ships so we get the correct position and direction
                 updateExplosionParticles(); // get the explosionswas

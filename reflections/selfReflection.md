@@ -1,0 +1,7 @@
+Self Reflection: 
+
+Topic: Computers and Binary
+
+Binary is the basis of modern technology and has been for a while. It makes sense if you want to work with a computer you work with thousands of yes and no's in order to give it simple logic. What this fails to see is context and nuance. It deals in absolutes and to tie back to my Death Star demonstration "Only a sith deals in absolutes". What I mean to say by this is that I believe that the binary nature of computer systems is not enough to understand a complex and irrational world. We can try and give a computer as much context as possible and help it understand, and we've done this with LLM's but I still believe that fundamentally these systems oversimplify and overcategorize. Not everything in this world is categorical and can be broken down to a computer. This system of categorizing and over simplifying serves politicians because it allows them to make "informed" decisions without need for real understanding. Categorizing and representation through numbers takes away our individuality and harms our relationship with the real world. 
+
+Now do I think computers are bad because of this? No, I don't. I think that computers are incredibly helpful and a great way to try and make sense of the world, but I think that with using them you need to be aware of their limitations. Computers and computational thinking need to be used with the understanding that they are representations and not the real world and that the real world is more complex, more strange, and has more context than we can currently convey. 

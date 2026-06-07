@@ -28,6 +28,8 @@
         <button id="pauseBtn">Pause</button>
         <button id="resumeBtn">Resume</button>
         <button id="restartBtn">Restart</button>
+        <button id="XOR">XOR</button>
+        <button id="OR">OR</button>
     </div>
 
     <!-- We will scale the canvas up using CSS so the pixels are visible -->
@@ -89,13 +91,17 @@
 
             let paused = false;
 
+            // only doing XOR and OR because NOT behaves the same as XOR
             let bitwiseOperation = "XOR";
             
             //grabs the buttons from the html
             const pauseBtn = document.getElementById('pauseBtn');
             const resumeBtn = document.getElementById('resumeBtn');
             const restartBtn = document.getElementById('restartBtn')
-            
+            const xorBTN = document.getElementById('XOR')
+            const orBTN = document.getElementById('OR')
+
+
             //when clicked pauses
             pauseBtn.addEventListener('click', () => {
                 paused = true;
@@ -110,6 +116,15 @@
                 WasmModule._setup_conway();
                 paused = false;
             } )
+
+            xorBTN.addEventListener('click', () => {
+                bitwiseOperation = "XOR";
+            });
+
+            orBTN.addEventListener('click', () => {
+                bitwiseOperation = "OR";
+            });
+
 
 
             canvas.addEventListener('mousedown', (e) => {
@@ -131,7 +146,7 @@
                 // note: e.clientX is the coordinate relative to the canvas element (0-width of canvas)
                 const x = Math.floor((e.clientX - rect.left) * scaleX); // calculate grid position
                 const y = Math.floor((e.clientY - rect.top) * scaleY);
-                
+
                 if (x >= 0 && x < width && y >= 0 && y < height) {
                     console.log(`setting cell ${x} ${y}`);
 
@@ -217,10 +232,6 @@
                     drawPattern(400, 150, spaceship);
                     drawPattern(250, 250, spaceship);
                                         
-                    imageData.data[pixelIndex] = 255;
-                    imageData.data[pixelIndex+1] = 255;
-                    imageData.data[pixelIndex+2] = 180;
-                    imageData.data[pixelIndex+3] = 255;
                     ctx.putImageData(imageData, 0, 0); // update the image in canvas so we can see it
                 }
             });
@@ -264,8 +275,8 @@
                     
                     // Push the pixels to the canvas
                     ctx.putImageData(imageData, 0, 0);
-                    
-                    requestAnimationFrame(render);
+
+                     requestAnimationFrame(render);
                 }
             }
             
