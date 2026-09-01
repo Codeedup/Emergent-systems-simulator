@@ -2,7 +2,7 @@
 
 **An interactive C, WebAssembly, and Three.js project exploring cellular automata, reaction–diffusion, procedural structures, and agent-based movement.**
 
-![Final Battle of Yavin simulation](reflections/successful-xwing.png)
+<img src="https://media.giphy.com/media/YeEyhGD8yNt0VzFsme/giphy.gif" width="400">
 
 [Watch the final simulation](reflections/final_scene.mp4)
 
