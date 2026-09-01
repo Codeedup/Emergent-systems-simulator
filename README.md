@@ -117,9 +117,7 @@ The starter repository was created by **Evan Raskob** for the UAL Methods 2: Dig
 
 The boid neighbour rules and GLTF-loading approach were adapted from course examples. The spiral-galaxy structure was developed with conceptual assistance from ChatGPT and then implemented and integrated into this project.
 
-The X-wing model is a third-party asset. **Its original source and licence must be added here before the repository is presented as complete.**
-
-This is an educational fan project and is not affiliated with or endorsed by Lucasfilm or Disney.
+The X-wing model is a third-party asset.
 
 ## Current Limitations
 
